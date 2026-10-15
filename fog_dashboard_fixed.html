@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>Load balancing in a Fog computing in healthcare system with Internet of Things devices (IoT) for Performance Enhancement and Optimal Resources </title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f0f2f8;
+            margin: 0;
+            padding: 20px;
+            color: #1e2a3e;
+        }
+        .container { max-width: 1500px; margin: 0 auto; }
+        h1 { font-size: 1.8rem; margin-bottom: 0; color: #0a4b6e; display: flex; align-items: center; gap: 12px; }
+        .sub { color: #2c5a74; border-left: 4px solid #3a86ff; padding-left: 16px; margin-bottom: 20px; }
+        .grid-2 { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 30px; }
+        .card { background: white; border-radius: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); padding: 20px; flex: 1; min-width: 280px; }
+        .card h3 { margin-top: 0; border-left: 5px solid #3a86ff; padding-left: 15px; }
+        .metric-tile { background: #f8fafc; border-radius: 20px; padding: 12px; text-align: center; margin-bottom: 12px; }
+        .metric-label { font-size: 0.7rem; text-transform: uppercase; color: #4b6f8c; }
+        .metric-value { font-size: 1.8rem; font-weight: 800; color: #1f6392; }
+        .fairness-bar { background: #e2e8f0; border-radius: 20px; height: 10px; margin-top: 8px; }
+        .fairness-fill { background: #2563eb; width: 0%; height: 10px; border-radius: 20px; }
+        .node-rates { display: flex; gap: 15px; justify-content: space-around; background: #f1f5f9; border-radius: 20px; padding: 12px; }
+        .history-box { overflow-x: auto; max-height: 400px; margin-top: 20px; background: white; border-radius: 28px; padding: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+        th { background: #e9edf2; padding: 10px; position: sticky; top: 0; }
+        td { padding: 6px; border-bottom: 1px solid #cbd5e1; }
+        button { background: #1f6392; border: none; color: white; padding: 8px 20px; border-radius: 40px; margin-right: 10px; cursor: pointer; }
+        iframe { width: 100%; height: 500px; border: none; border-radius: 28px; background: white; margin-top: 25px; }
+        .badge { background: #22c55e; color: white; border-radius: 40px; padding: 2px 10px; font-size: 0.7rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 DASHBOAR FOR LOAD BALANCER IN FOG COMPUTING IN HEALTHCARE WITH IOT DEVICES <span class="badge">Active</span></h1>
+    <div class="sub">λ , ρ , Jain , P(q) , Response Time, Fog Load</div>
+
+    <div class="grid-2">
+        <div class="card">
+            <h3>📈 Queueing Theory</h3>
+            <div class="metric-tile"><div class="metric-label">λ (requests/sec)</div><div id="lambdaVal" class="metric-value">0</div></div>
+            <div class="metric-tile"><div class="metric-label">ρ = λ/(n·μ)</div><div id="rhoVal" class="metric-value">0.00</div></div>
+            <div class="metric-tile"><div class="metric-label">⏱️ Average of Response Time (ms)</div><div id="respVal" class="metric-value">0</div></div>
+            <div class="metric-tile"><div class="metric-label">⚖️Jain's Fairness Index (Fairness)</div><div id="jainVal" class="metric-value">0.0000</div>
+                <div class="fairness-bar"><div id="jainFill" class="fairness-fill"></div></div>
+            </div>
+            <div class="metric-tile"><div class="metric-label">📊 Waiting in queue P(q)</div><div id="pqVal" class="metric-value">0.0000</div></div>
+            <div class="metric-tile"><div class="metric-label">☁️ Upload to cloud</div><div id="offloadVal" class="metric-value">Inactive</div></div>
+        </div>
+
+        <div class="card">
+            <h3>🖥️ Mathematical Model & CPU</h3>
+            <div id="nodeRates" class="node-rates">Loading...</div>
+            <div id="cpuDetails" style="margin-top: 18px;"></div>
+        </div>
+    </div>
+
+    <div class="history-box">
+        <div style="display: flex; justify-content: space-between;">
+            <h3 style="margin:0">📜 Record Measurement every 5 Seconds</h3>
+            <div><button id="downloadBtn">📥 CSV</button><button id="clearBtn">🗑️ Clear </button></div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table id="historyTable">
+                <thead><tr><th>Time</th><th>λ</th><th>ρ</th><th>Pq</th><th>T(ms)</th><th>Jain</th><th>fog1</th><th>fog2</th><th>fog3</th><th>GW CPU</th><th>N1 CPU</th></tr></thead>
+                <tbody id="historyBody"><tr><td colspan="11">Wating for  the first Reading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <iframe src="http://192.168.157.129:8404/stats" title="HAProxy stats"></iframe>
+</div>
+
+<script>
+    // ✅ Link
+    const METRICS_URL = "http://192.168.157.129:8000/metrics";
+    const MU = 400;   // Services of every fog (req/s)
+    let history = [];
+
+    function factorial(n) { return n<=1 ? 1 : n*factorial(n-1); }
+    function erlangC(c, rho) {
+        if (rho>=1) return 1;
+        let sum=0;
+        for(let k=0; k<c; k++) sum += Math.pow(c*rho,k)/factorial(k);
+        let term = Math.pow(c*rho,c)/factorial(c);
+        return (term/(1-rho))/(sum + term/(1-rho));
+    }
+
+    async function fetchMetrics() {
+        try {
+            const res = await fetch(METRICS_URL);
+            const data = await res.json();
+            if (data.error) { console.warn("error in metrics"); return; }
+
+            const lambda = data.arrival_rate_lambda_req_per_sec || 0;
+            const rates = data.fog_node_rates_req_per_sec || {};
+            const n = 3;
+            const rho = lambda / (n * MU);
+            const pq = erlangC(n, rho);
+            const wq = (lambda>0 && rho<1) ? (pq/(lambda*(1-rho)))*1000 : 0;
+            const ttotal = data.avg_response_time_ms || 0;
+            const jain = data.jains_fairness_index || 0;
+            const offload = data.cloud_offloading_status || "inactive";
+
+            document.getElementById("lambdaVal").innerText = lambda.toFixed(1);
+            document.getElementById("rhoVal").innerHTML = rho.toFixed(4);
+            document.getElementById("respVal").innerText = ttotal.toFixed(2);
+            document.getElementById("jainVal").innerText = jain.toFixed(6);
+            document.getElementById("pqVal").innerText = pq.toFixed(6);
+            document.getElementById("offloadVal").innerHTML = offload;
+            document.getElementById("jainFill").style.width = (jain*100)+"%";
+
+            // Rate Display 
+            document.getElementById("nodeRates").innerHTML = `
+                <div>🔥 fog1: ${(rates.fog1||0).toFixed(1)} req/s</div>
+                <div>🔥 fog2: ${(rates.fog2||0).toFixed(1)} req/s</div>
+                <div>🔥 fog3: ${(rates.fog3||0).toFixed(1)} req/s</div>
+            `;
+
+            // CPU (Optinal)
+            let cpuHtml = `<div class="metric-tile"><div class="metric-label">Gateway CPU</div><div>${data.fog_gateway_container?.CPUPerc || '0%'}</div></div>`;
+            cpuHtml += `<div class="metric-tile"><div class="metric-label">Node1 CPU</div><div>${data.fog_node_1_container?.CPUPerc || '0%'}</div></div>`;
+            document.getElementById("cpuDetails").innerHTML = cpuHtml;
+
+            // History Record
+            const now = new Date().toLocaleTimeString();
+            history.unshift({
+                time: now, lambda: lambda.toFixed(1), rho: rho.toFixed(4), pq: pq.toFixed(6),
+                ttotal: ttotal.toFixed(2), jain: jain.toFixed(6),
+                f1: rates.fog1||0, f2: rates.fog2||0, f3: rates.fog3||0,
+                gwCpu: data.fog_gateway_container?.CPUPerc || '0%',
+                n1Cpu: data.fog_node_1_container?.CPUPerc || '0%'
+            });
+            if(history.length>100) history.pop();
+            renderTable();
+        } catch(e) {
+            console.error("❌ The Metrics can not be connected", e);
+            document.getElementById("nodeRates").innerHTML = `<span style="color:red">⚠️ Connection to the Metrics Server is Fails on 8081</span>`;
+        }
+    }
+
+    function renderTable() {
+        let html = "";
+        for(let h of history) {
+            html += `<tr>
+                <td>${h.time}</td><td>${h.lambda}</td><td>${h.rho}</td><td>${h.pq}</td>
+                <td>${h.ttotal}</td><td>${h.jain}</td>
+                <td>${h.f1}</td><td>${h.f2}</td><td>${h.f3}</td>
+                <td>${h.gwCpu}</td><td>${h.n1Cpu}</td>
+            </tr>`;
+        }
+        document.getElementById("historyBody").innerHTML = html;
+    }
+
+    function downloadCSV() {
+        if(history.length===0) return;
+        let csv = "Time,Lambda,Rho,Pq,Ttotal_ms,Jain,Fog1,Fog2,Fog3,GW_CPU,Node1_CPU\n";
+        for(let h of history) {
+            csv += `${h.time},${h.lambda},${h.rho},${h.pq},${h.ttotal},${h.jain},${h.f1},${h.f2},${h.f3},${h.gwCpu},${h.n1Cpu}\n`;
+        }
+        const blob = new Blob([csv], {type: "text/csv"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "fog_metrics.csv";
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function clearHistory() { history = []; renderTable(); }
+
+    setInterval(fetchMetrics, 5000);
+    fetchMetrics();
+    document.getElementById("downloadBtn").onclick = downloadCSV;
+    document.getElementById("clearBtn").onclick = clearHistory;
+</script>
+</body>
+</html>

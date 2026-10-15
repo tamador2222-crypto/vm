@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fog Computing – Full Dashboard + Final Report (v2)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1e1e2f; color: #eee; }
+        .row { display: flex; gap: 20px; flex-wrap: wrap; }
+        .panel { background: #2a2a3a; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
+        .metric { margin-bottom: 10px; }
+        .metric-value { font-size: 22px; font-weight: bold; color: #6ea8fe; }
+        .metric-label { font-size: 12px; color: #aaa; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
+        th { background: #3a3a4a; }
+        .alert { color: #ff6666; }
+        .success { color: #66ff88; }
+        button { background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0b5ed7; }
+        .file-row { display: flex; gap: 10px; align-items: center; margin: 5px 0; flex-wrap: wrap; }
+        .file-row input[type="file"] { flex: 2; }
+        .file-row select { flex: 1; padding: 5px; }
+        .iframe-container { margin-top: 20px; border: 1px solid #444; border-radius: 12px; overflow: hidden; }
+        iframe { width: 100%; height: 600px; border: none; }
+        .result-card { background: #1e1e2f; padding: 10px; border-radius: 8px; margin: 5px 0; }
+        .highlight-green { color: #66ff88; font-weight: bold; }
+        .highlight-blue { color: #6ea8fe; font-weight: bold; }
+        .highlight-orange { color: #ffaa00; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Fog Computing PhD – Live Dashboard + Final Report (v2)</h1>
+
+    <!-- Live Metrics Row -->
+    <div class="row">
+        <div class="panel" style="width: 400px;">
+            <h3>📊 Live Queueing Metrics</h3>
+            <div id="liveMetrics">Loading...</div>
+        </div>
+        <div class="panel" style="flex: 1;">
+            <h3>🧠 Container CPU / Memory (Live)</h3>
+            <div id="liveDocker">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Final Report Section -->
+    <div class="panel">
+        <h3>📈 Final Comparison Report (Baseline vs PSO Optimizer)</h3>
+        <div style="border: 1px solid #444; border-radius: 8px; padding: 15px;">
+            <p>📤 Choose each CSV file and its type, then click "Generate Report".</p>
+            <div id="fileInputs">
+                <div class="file-row">
+                    <input type="file" id="file1" accept=".csv">
+                    <select id="type1">
+                        <option value="syn_base">Synthetic Baseline</option>
+                        <option value="syn_opt">Synthetic Optimized</option>
+                        <option value="real_base">Real Baseline</option>
+                        <option value="real_opt">Real Optimized</option>
+                    </select>
+                </div>
+                <div class="file-row">
+                    <input type="file" id="file2" accept=".csv">
+                    <select id="type2">
+                        <option value="syn_base">Synthetic Baseline</option>
+                        <option value="syn_opt">Synthetic Optimized</option>
+                        <option value="real_base">Real Baseline</option>
+                        <option value="real_opt">Real Optimized</option>
+                    </select>
+                </div>
+                <div class="file-row">
+                    <input type="file" id="file3" accept=".csv">
+                    <select id="type3">
+                        <option value="syn_base">Synthetic Baseline</option>
+                        <option value="syn_opt">Synthetic Optimized</option>
+                        <option value="real_base">Real Baseline</option>
+                        <option value="real_opt">Real Optimized</option>
+                    </select>
+                </div>
+                <div class="file-row">
+                    <input type="file" id="file4" accept=".csv">
+                    <select id="type4">
+                        <option value="syn_base">Synthetic Baseline</option>
+                        <option value="syn_opt">Synthetic Optimized</option>
+                        <option value="real_base">Real Baseline</option>
+                        <option value="real_opt">Real Optimized</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="analyzeFilesV2()" style="background: #28a745; padding: 10px 30px;">🚀 Generate Report</button>
+        </div>
+        <div id="reportOutput">
+            <p>Select the 4 CSV files and their types, then click "Generate Report".</p>
+        </div>
+    </div>
+
+    <!-- HAProxy Stats -->
+    <div class="iframe-container">
+        <iframe src="http://192.168.157.129:8404/stats" title="HAProxy Stats"></iframe>
+    </div>
+
+    <script>
+        // ==================== Live Metrics (unchanged) ====================
+        const METRICS_URL = 'http://192.168.157.129:8000/metrics';
+        const RECORD_INTERVAL = 5000;
+
+        function getCPU(container) {
+            if (!container || !container.CPUPerc) return 'N/A';
+            return parseFloat(container.CPUPerc.replace('%', '')).toFixed(2);
+        }
+
+        async function refresh() {
+            try {
+                const resp = await fetch(METRICS_URL);
+                const data = await resp.json();
+                if (data.error) {
+                    document.getElementById('liveMetrics').innerHTML = `<div style="color:#ff6666">Error: ${data.error}</div>`;
+                    return;
+                }
+                const rhoClass = data.utilization_rho >= 1 ? 'alert' : '';
+                let liveHtml = `
+                    <div class="metric"><div class="metric-label">Arrival Rate λ (req/s)</div><div class="metric-value">${(data.arrival_rate_lambda_req_per_sec ?? 0).toFixed(2)}</div></div>
+                    <div class="metric"><div class="metric-label">Avg Response Time (ms)</div><div class="metric-value">${(data.avg_response_time_ms ?? 0).toFixed(2)}</div></div>
+                    <div class="metric"><div class="metric-label">Utilization ρ</div><div class="metric-value ${rhoClass}">${(data.utilization_rho ?? 0).toFixed(4)} ${data.utilization_rho >= 1 ? '⚠️ SATURATED' : ''}</div></div>
+                    <div class="metric"><div class="metric-label">Jain’s Fairness</div><div class="metric-value">${(data.jains_fairness_index ?? 0).toFixed(6)}</div></div>
+                    <div class="metric"><div class="metric-label">Cloud Status</div><div class="metric-value">${data.cloud_offloading_status ?? 'inactive'}</div></div>
+                `;
+                document.getElementById('liveMetrics').innerHTML = liveHtml;
+
+                let dockerHtml = '<table><tr><th>Container</th><th>CPU%</th><th>Mem%</th></tr>';
+                const containers = ['fog_gateway_container', 'fog_node_1_container', 'fog_node_2_container', 'fog_node_3_container'];
+                for (let key of containers) {
+                    let cont = data[key];
+                    if (cont && cont.CPUPerc) {
+                        dockerHtml += `<tr><td>${cont.Container || key}</td><td>${cont.CPUPerc}</td><td>${cont.MemPerc}</td></tr>`;
+                    }
+                }
+                dockerHtml += '</table>';
+                document.getElementById('liveDocker').innerHTML = dockerHtml;
+            } catch (err) {
+                document.getElementById('liveMetrics').innerHTML = `<div style="color:#ff6666">Cannot connect: ${err.message}</div>`;
+            }
+        }
+        refresh();
+        setInterval(refresh, RECORD_INTERVAL);
+
+        // ==================== File Analysis v2 ====================
+        function parseCSV(text) {
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            if (lines.length === 0) return [];
+            const headers = lines[0].split(',');
+            const result = [];
+            for (let i = 1; i < lines.length; i++) {
+                const data = lines[i].split(',');
+                if (data.length === headers.length) {
+                    let obj = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        obj[headers[j].trim()] = data[j].trim();
+                    }
+                    result.push(obj);
+                }
+            }
+            return result;
+        }
+
+        function getAvgResponseTime(csvText) {
+            const data = parseCSV(csvText);
+            const agg = data.find(row => row['Name'] === 'Aggregated');
+            if (agg && agg['Average Response Time']) {
+                return parseFloat(agg['Average Response Time']);
+            }
+            return null;
+        }
+
+        function getRPS(csvText) {
+            const data = parseCSV(csvText);
+            const agg = data.find(row => row['Name'] === 'Aggregated');
+            if (agg && agg['Requests/s']) {
+                return parseFloat(agg['Requests/s']);
+            }
+            return null;
+        }
+
+        async function analyzeFilesV2() {
+            const fileInputs = [
+                { file: document.getElementById('file1'), type: document.getElementById('type1').value },
+                { file: document.getElementById('file2'), type: document.getElementById('type2').value },
+                { file: document.getElementById('file3'), type: document.getElementById('type3').value },
+                { file: document.getElementById('file4'), type: document.getElementById('type4').value }
+            ];
+
+            const filesMap = {};
+            let missing = false;
+
+            for (let inp of fileInputs) {
+                if (inp.file.files.length === 0) {
+                    missing = true;
+                } else {
+                    filesMap[inp.type] = inp.file.files[0];
+                }
+            }
+
+            if (missing || Object.keys(filesMap).length < 4) {
+                document.getElementById('reportOutput').innerHTML = `<div style="color:#ff6666;">❌ Please select all 4 CSV files (one for each type).</div>`;
+                return;
+            }
+
+            try {
+                const synBaseText = await filesMap['syn_base'].text();
+                const synOptText = await filesMap['syn_opt'].text();
+                const realBaseText = await filesMap['real_base'].text();
+                const realOptText = await filesMap['real_opt'].text();
+
+                const synBaseRT = getAvgResponseTime(synBaseText);
+                const synOptRT = getAvgResponseTime(synOptText);
+                const realBaseRT = getAvgResponseTime(realBaseText);
+                const realOptRT = getAvgResponseTime(realOptText);
+
+                const synBaseRPS = getRPS(synBaseText);
+                const synOptRPS = getRPS(synOptText);
+                const realBaseRPS = getRPS(realBaseText);
+                const realOptRPS = getRPS(realOptText);
+
+                let html = `<div style="display: flex; gap: 20px; flex-wrap: wrap;">`;
+
+                // Synthetic Results
+                html += `<div class="result-card" style="flex:1; min-width: 250px;">
+                    <h4>🤖 Synthetic Data</h4>
+                    <table>
+                        <tr><td>Baseline RT:</td><td><span class="highlight-blue">${synBaseRT ? synBaseRT.toFixed(2) : 'N/A'} ms</span></td></tr>
+                        <tr><td>Optimized RT:</td><td><span class="highlight-green">${synOptRT ? synOptRT.toFixed(2) : 'N/A'} ms</span></td></tr>
+                        <tr><td><b>Improvement:</b></td><td><b class="highlight-orange">${synBaseRT && synOptRT ? ((synBaseRT - synOptRT)/synBaseRT * 100).toFixed(2) : 'N/A'}%</b></td></tr>
+                        <tr><td>Baseline RPS:</td><td>${synBaseRPS ? synBaseRPS.toFixed(2) : 'N/A'}</td></tr>
+                        <tr><td>Optimized RPS:</td><td>${synOptRPS ? synOptRPS.toFixed(2) : 'N/A'}</td></tr>
+                    </table>
+                </div>`;
+
+                // Real Results
+                html += `<div class="result-card" style="flex:1; min-width: 250px;">
+                    <h4>💊 Real Health Data</h4>
+                    <table>
+                        <tr><td>Baseline RT:</td><td><span class="highlight-blue">${realBaseRT ? realBaseRT.toFixed(2) : 'N/A'} ms</span></td></tr>
+                        <tr><td>Optimized RT:</td><td><span class="highlight-green">${realOptRT ? realOptRT.toFixed(2) : 'N/A'} ms</span></td></tr>
+                        <tr><td><b>Improvement:</b></td><td><b class="highlight-orange">${realBaseRT && realOptRT ? ((realBaseRT - realOptRT)/realBaseRT * 100).toFixed(2) : 'N/A'}%</b></td></tr>
+                        <tr><td>Baseline RPS:</td><td>${realBaseRPS ? realBaseRPS.toFixed(2) : 'N/A'}</td></tr>
+                        <tr><td>Optimized RPS:</td><td>${realOptRPS ? realOptRPS.toFixed(2) : 'N/A'}</td></tr>
+                    </table>
+                </div>`;
+
+                html += `</div><hr><div style="text-align: center; font-size: 18px; margin-top: 10px;">
+                    🎯 <b>Overall Improvement:</b> 
+                    Synthetic: <span style="color:#ffaa00;">${synBaseRT && synOptRT ? ((synBaseRT - synOptRT)/synBaseRT * 100).toFixed(2) : 'N/A'}%</span> |
+                    Real: <span style="color:#ffaa00;">${realBaseRT && realOptRT ? ((realBaseRT - realOptRT)/realBaseRT * 100).toFixed(2) : 'N/A'}%</span>
+                </div>`;
+
+                document.getElementById('reportOutput').innerHTML = html;
+            } catch (e) {
+                document.getElementById('reportOutput').innerHTML = `<div style="color:#ff6666;">❌ Error: ${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
