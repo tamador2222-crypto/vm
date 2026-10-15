@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  fog-gateway:
+    image: haproxy:2.6
+    container_name: fog-gateway
+    user: root
+    ports:
+      - "8080:80"
+      - "8404:8404"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - fog-net
+    depends_on:
+      - fog-node-1
+      - fog-node-2
+      - fog-node-3
+
+  fog-node-1:
+    image: python:3.9-alpine
+    container_name: fog-node-1
+    volumes:
+      - ./fog_processor.py:/processor.py:ro
+    command: python /processor.py
+    networks:
+      - fog-net
+
+  fog-node-2:
+    image: python:3.9-alpine
+    container_name: fog-node-2
+    volumes:
+      - ./fog_processor.py:/processor.py:ro
+    command: python /processor.py
+    networks:
+      - fog-net
+
+  fog-node-3:
+    image: python:3.9-alpine
+    container_name: fog-node-3
+    volumes:
+      - ./fog_processor.py:/processor.py:ro
+    command: python /processor.py
+    networks:
+      - fog-net
+
+  cloud-server:
+    image: ealen/echo-server:latest
+    container_name: cloud-server
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - ECHO_SERVER_ROOT=/health:healthy
+    command: sh -c "tc qdisc replace dev eth0 root netem delay 200ms && /docker-entrypoint.sh"
+    networks:
+      - fog-net
+
+networks:
+  fog-net:
+    driver: bridge
